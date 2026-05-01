@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>任務板</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #ffffff;
+    --bg2: #f5f5f3;
+    --bg3: #eeede9;
+    --text: #1a1a18;
+    --text2: #6b6b67;
+    --text3: #a0a09c;
+    --border: rgba(0,0,0,0.1);
+    --border2: rgba(0,0,0,0.18);
+    --radius: 8px;
+    --radius-lg: 12px;
+    --overdue-bg: #FCEBEB;
+    --overdue-text: #A32D2D;
+    --overdue-border: #F09595;
+    --dot: #E24B4A;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #1c1c1a;
+      --bg2: #252523;
+      --bg3: #2e2e2b;
+      --text: #f0efe9;
+      --text2: #9e9e99;
+      --text3: #6b6b67;
+      --border: rgba(255,255,255,0.1);
+      --border2: rgba(255,255,255,0.18);
+      --overdue-bg: #2d1414;
+      --overdue-text: #f09595;
+      --overdue-border: #7a2020;
+      --dot: #f09595;
+    }
+  }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', sans-serif;
+    background: var(--bg3);
+    color: var(--text);
+    min-height: 100vh;
+    padding: 2rem 1rem;
+  }
+
+  .container { max-width: 640px; margin: 0 auto; }
+
+  .header { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 1.25rem; flex-wrap: wrap; gap: 8px; }
+  .header h1 { font-size: 18px; font-weight: 500; }
+  .date-str { font-size: 13px; color: var(--text2); }
+
+  .sync-bar { display: flex; align-items: center; gap: 8px; margin-bottom: 1.25rem; min-height: 24px; }
+  .sync-status { font-size: 12px; color: var(--text3); }
+  .sync-btn { font-size: 12px; padding: 3px 10px; border-radius: 99px; border: 0.5px solid var(--border2); background: transparent; color: var(--text2); cursor: pointer; }
+  .sync-btn:hover { background: var(--bg2); }
+
+  .counts { display: flex; gap: 6px; margin-bottom: 1.25rem; flex-wrap: wrap; }
+  .pill { font-size: 12px; padding: 3px 10px; border-radius: 99px; border: 0.5px solid var(--border); color: var(--text2); background: var(--bg); }
+  .pill.overdue { background: var(--overdue-bg); color: var(--overdue-text); border-color: var(--overdue-border); }
+
+  .section { margin-bottom: 1.5rem; }
+  .section-label { font-size: 11px; color: var(--text3); font-weight: 500; letter-spacing: .06em; text-transform: uppercase; margin-bottom: 8px; }
+
+  .task-row {
+    display: flex; align-items: flex-start; gap: 10px;
+    padding: 9px 12px;
+    background: var(--bg);
+    border: 0.5px solid var(--border);
+    border-radius: var(--radius);
+    margin-bottom: 5px;
+    cursor: pointer;
+    transition: background .1s;
+  }
+  .task-row:hover { background: var(--bg2); }
+  .task-row.done { opacity: .45; }
+
+  .check {
+    width: 18px; height: 18px; border-radius: 4px;
+    border: 0.5px solid var(--border2);
+    flex-shrink: 0; margin-top: 1px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px; color: var(--text2);
+  }
+  .task-row.done .check { background: var(--bg2); }
+
+  .task-body { flex: 1; min-width: 0; }
+  .task-text { font-size: 14px; color: var(--text); line-height: 1.5; }
+  .task-row.done .task-text { text-decoration: line-through; color: var(--text2); }
+  .task-proj { font-size: 11px; color: var(--text3); margin-top: 2px; }
+
+  .overdue-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--dot); flex-shrink: 0; margin-top: 6px; }
+
+  .del-btn {
+    font-size: 13px; color: var(--text3); background: transparent;
+    border: none; cursor: pointer; opacity: 0; padding: 0; margin-top: 1px; line-height: 1; flex-shrink: 0;
+  }
+  .task-row:hover .del-btn { opacity: 1; }
+
+  .empty { font-size: 13px; color: var(--text3); padding: 6px 0; font-style: italic; }
+  .overdue-empty { font-size: 13px; color: var(--text3); padding: 6px 0; }
+
+  .add-box {
+    margin-top: 8px;
+    background: var(--bg);
+    border: 0.5px solid var(--border2);
+    border-radius: var(--radius);
+    overflow: hidden;
+  }
+  .add-box:focus-within { border-color: var(--text3); }
+  .add-main { display: flex; align-items: center; }
+  .add-main input {
+    flex: 1; font-size: 14px; padding: 9px 12px;
+    border: none; background: transparent; color: var(--text); outline: none;
+  }
+  .add-main input::placeholder { color: var(--text3); }
+  .add-hint { font-size: 12px; color: var(--text3); padding: 0 10px; white-space: nowrap; }
+  .add-footer {
+    border-top: 0.5px solid var(--border);
+    padding: 6px 10px;
+    display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+  }
+  .proj-btn {
+    font-size: 12px; padding: 3px 10px; border-radius: 99px;
+    border: 0.5px solid var(--border); background: transparent;
+    color: var(--text2); cursor: pointer; white-space: nowrap;
+  }
+  .proj-btn:hover { background: var(--bg2); }
+  .proj-btn.selected { background: var(--bg2); color: var(--text); border-color: var(--border2); }
+  .footer-hint { font-size: 12px; color: var(--text3); margin-left: auto; }
+
+  .manage-btn {
+    font-size: 12px; color: var(--text3); background: transparent;
+    border: none; cursor: pointer; text-decoration: underline;
+    text-decoration-color: var(--border2); margin-top: .25rem;
+  }
+  .proj-mgr {
+    margin-top: .75rem; padding: .75rem 1rem;
+    background: var(--bg2); border-radius: var(--radius);
+    border: 0.5px solid var(--border);
+  }
+  .proj-mgr-row { display: flex; align-items: center; gap: 6px; margin-bottom: 5px; }
+  .proj-mgr-row span { font-size: 13px; color: var(--text2); flex: 1; }
+  .proj-mgr-del { font-size: 12px; color: var(--text3); background: transparent; border: none; cursor: pointer; }
+  .proj-new-row { display: flex; gap: 6px; margin-top: 6px; }
+  .proj-new-row input {
+    flex: 1; font-size: 13px; padding: 5px 8px;
+    border-radius: var(--radius); border: 0.5px solid var(--border2);
+    background: var(--bg); color: var(--text);
+  }
+  .proj-new-row button {
+    font-size: 13px; padding: 5px 12px; border-radius: var(--radius);
+    border: 0.5px solid var(--border2); background: transparent;
+    color: var(--text); cursor: pointer;
+  }
+  .proj-new-row button:hover { background: var(--bg3); }
+
+  .spinner { display: inline-block; width: 12px; height: 12px; border: 1.5px solid var(--border2); border-top-color: var(--text2); border-radius: 50%; animation: spin .6s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+<div class="container">
+  <div class="header">
+    <h1>今天要做什麼</h1>
+    <span class="date-str" id="date-str"></span>
+  </div>
+
+  <div class="sync-bar">
+    <span class="sync-status" id="sync-status">載入中…</span>
+    <button class="sync-btn" onclick="syncNow()">同步</button>
+  </div>
+
+  <div class="counts" id="counts"></div>
+
+  <div class="section">
+    <div class="section-label">今天</div>
+    <div id="today-list"></div>
+    <div class="add-box">
+      <div class="add-main">
+        <input id="in-today" placeholder="新增任務，按 Enter 送出" onkeydown="if(event.key==='Enter')submit('today')"/>
+        <span class="add-hint">Enter ↵</span>
+      </div>
+      <div class="add-footer" id="footer-today"></div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-label">待處理</div>
+    <div id="backlog-list"></div>
+    <div class="add-box">
+      <div class="add-main">
+        <input id="in-backlog" placeholder="還沒排時間的任務" onkeydown="if(event.key==='Enter')submit('backlog')"/>
+        <span class="add-hint">Enter ↵</span>
+      </div>
+      <div class="add-footer" id="footer-backlog"></div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-label">已積欠</div>
+    <div id="overdue-list"></div>
+    <div class="overdue-empty" id="overdue-empty">沒有積欠</div>
+  </div>
+
+  <button class="manage-btn" onclick="toggleMgr()">管理專案標籤</button>
+  <div class="proj-mgr" id="proj-mgr" style="display:none">
+    <div id="mgr-list"></div>
+    <div class="proj-new-row">
+      <input id="new-proj-input" placeholder="新增專案…" onkeydown="if(event.key==='Enter')addProj()"/>
+      <button onclick="addProj()">新增</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const API = 'https://script.google.com/macros/s/AKfycbzFVrgnsB7R_7ns3a18iM4QB2dlWcxnkaIWKxRIDKXtJJLmBHpduYoMUjewAp8w4vMD/exec';
+const LOCAL_KEY = 'taskboard_local_v1';
+const todayStr = new Date().toISOString().slice(0,10);
+let sel = {today: null, backlog: null};
+let state = { projects: [], tasks: [] };
+let syncing = false;
+
+function loadLocal() {
+  try { const s = localStorage.getItem(LOCAL_KEY); if(s) state = JSON.parse(s); } catch(e) {}
+}
+function saveLocal() {
+  try { localStorage.setItem(LOCAL_KEY, JSON.stringify(state)); } catch(e) {}
+}
+
+function setStatus(msg, loading) {
+  const el = document.getElementById('sync-status');
+  el.innerHTML = loading ? `<span class="spinner"></span> ${msg}` : msg;
+}
+
+async function syncNow() {
+  if (syncing) return;
+  syncing = true;
+  setStatus('同步中…', true);
+  try {
+    const res = await fetch(API + "?action=getAll", { redirect: "follow" });
+    const data = await res.json();
+    if (data.tasks !== undefined) {
+      state.tasks = data.tasks;
+      state.projects = data.projects && data.projects.length ? data.projects : state.projects;
+      saveLocal();
+      setStatus('已同步 ' + new Date().toLocaleTimeString('zh-TW', {hour:'2-digit', minute:'2-digit'}));
+      render();
+    }
+  } catch(e) {
+    setStatus('同步失敗，使用本地資料');
+  }
+  syncing = false;
+}
+
+async function pushData() {
+  try {
+    const params = new URLSearchParams({
+      action: 'save',
+      tasks: JSON.stringify(state.tasks),
+      projects: JSON.stringify(state.projects)
+    });
+    await fetch(API + '?' + params.toString(), { redirect: 'follow' });
+    setStatus('已儲存 ' + new Date().toLocaleTimeString('zh-TW', {hour:'2-digit', minute:'2-digit'}));
+  } catch(e) {
+    setStatus('儲存失敗，資料已在本地保存');
+  }
+}
+
+function isOverdue(t) {
+  return !t.done && t.bucket === 'today' && t.addedDate && t.addedDate < todayStr;
+}
+
+function taskHtml(t, showDot) {
+  const dot = showDot ? '<div class="overdue-dot"></div>' : '';
+  const check = t.done ? '✓' : '';
+  const proj = t.project ? `<div class="task-proj">${t.project}</div>` : '';
+  return `<div class="task-row ${t.done?'done':''}">
+    ${dot}
+    <div class="check" onclick="toggleDone(${t.id})">${check}</div>
+    <div class="task-body" onclick="toggleDone(${t.id})">
+      <div class="task-text">${t.text}</div>
+      ${proj}
+    </div>
+    <button class="del-btn" onclick="deleteTask(${t.id})">✕</button>
+  </div>`;
+}
+
+function renderFooter(bucket) {
+  const footer = document.getElementById('footer-' + bucket);
+  const btns = state.projects.map(p => {
+    const active = sel[bucket] === p;
+    return `<button class="proj-btn ${active?'selected':''}" onclick="selectProj('${bucket}','${p}')">${p}</button>`;
+  }).join('');
+  footer.innerHTML = btns + '<span class="footer-hint">選擇專案（可略）</span>';
+}
+
+function selectProj(bucket, p) {
+  sel[bucket] = sel[bucket] === p ? null : p;
+  renderFooter(bucket);
+}
+
+function submit(bucket) {
+  const input = document.getElementById('in-' + bucket);
+  const text = input.value.trim();
+  if (!text) return;
+  state.tasks.push({ id: Date.now(), text, project: sel[bucket] || '', bucket, done: false, addedDate: todayStr });
+  input.value = '';
+  sel[bucket] = null;
+  saveLocal(); pushData(); render();
+  document.getElementById('in-' + bucket).focus();
+}
+
+function toggleDone(id) {
+  const t = state.tasks.find(t => t.id === id);
+  if (t) { t.done = !t.done; saveLocal(); pushData(); render(); }
+}
+
+function deleteTask(id) {
+  state.tasks = state.tasks.filter(t => t.id !== id);
+  saveLocal(); pushData(); render();
+}
+
+function addProj() {
+  const input = document.getElementById('new-proj-input');
+  const name = input.value.trim();
+  if (!name || state.projects.includes(name)) return;
+  state.projects.push(name);
+  input.value = '';
+  saveLocal(); pushData(); render();
+}
+
+function delProj(i) {
+  state.projects.splice(i, 1);
+  saveLocal(); pushData(); render();
+}
+
+function toggleMgr() {
+  const el = document.getElementById('proj-mgr');
+  el.style.display = el.style.display === 'none' ? 'block' : 'none';
+}
+
+function render() {
+  document.getElementById('date-str').textContent = new Date().toLocaleDateString('zh-TW', {month:'long', day:'numeric', weekday:'short'});
+
+  const overdue = state.tasks.filter(isOverdue);
+  const today = state.tasks.filter(t => t.bucket === 'today' && !isOverdue(t));
+  const backlog = state.tasks.filter(t => t.bucket === 'backlog');
+  const pending = state.tasks.filter(t => !t.done).length;
+
+  let ch = `<span class="pill">${pending} 未完成</span>`;
+  if (overdue.length) ch += `<span class="pill overdue">${overdue.length} 積欠</span>`;
+  document.getElementById('counts').innerHTML = ch;
+
+  document.getElementById('today-list').innerHTML = today.length ? today.map(t => taskHtml(t, false)).join('') : '';
+  document.getElementById('backlog-list').innerHTML = backlog.length ? backlog.map(t => taskHtml(t, false)).join('') : '';
+
+  if (overdue.length) {
+    document.getElementById('overdue-list').innerHTML = overdue.map(t => taskHtml(t, true)).join('');
+    document.getElementById('overdue-empty').style.display = 'none';
+  } else {
+    document.getElementById('overdue-list').innerHTML = '';
+    document.getElementById('overdue-empty').style.display = 'block';
+  }
+
+  renderFooter('today');
+  renderFooter('backlog');
+
+  document.getElementById('mgr-list').innerHTML = state.projects.map((p,i) => `
+    <div class="proj-mgr-row">
+      <span>${p}</span>
+      <button class="proj-mgr-del" onclick="delProj(${i})">移除</button>
+    </div>`).join('');
+}
+
+loadLocal();
+render();
+syncNow();
+</script>
+</body>
+</html>
